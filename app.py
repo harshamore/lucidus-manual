@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Add custom CSS for styling - with direct CSS for tag elements and blue selection color
+# Add custom CSS for styling - with direct CSS for tag elements
 st.markdown("""
 <style>
     .main {
@@ -20,19 +20,6 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 1rem;
-    }
-    
-    /* Override Streamlit's button colors for selected state */
-    .stButton button[data-baseweb="button"][kind="primary"] {
-        background-color: #1976d2 !important;
-        border-color: #1976d2 !important;
-        color: white !important;
-    }
-    
-    /* Hover state for selected buttons */
-    .stButton button[data-baseweb="button"][kind="primary"]:hover {
-        background-color: #1565c0 !important;
-        border-color: #1565c0 !important;
     }
     
     /* Define styles directly for spans instead of using classes */
@@ -535,7 +522,6 @@ def handle_interest_select(interest):
     else:
         if len(st.session_state.selected_interests) < 3:
             st.session_state.selected_interests.append(interest)
-    st.rerun()
 
 def handle_current_skill_select(skill):
     if skill in st.session_state.current_skills:
@@ -543,7 +529,6 @@ def handle_current_skill_select(skill):
     else:
         if len(st.session_state.current_skills) < 3:
             st.session_state.current_skills.append(skill)
-    st.rerun()
 
 def handle_desired_skill_select(skill):
     if skill in st.session_state.desired_skills:
@@ -551,7 +536,6 @@ def handle_desired_skill_select(skill):
     else:
         if len(st.session_state.desired_skills) < 3:
             st.session_state.desired_skills.append(skill)
-    st.rerun()
 
 def handle_sdg_select(sdg_id):
     if sdg_id in st.session_state.selected_sdgs:
@@ -559,7 +543,6 @@ def handle_sdg_select(sdg_id):
     else:
         if len(st.session_state.selected_sdgs) < 3:
             st.session_state.selected_sdgs.append(sdg_id)
-    st.rerun()
 
 def match_careers():
     # Score each career based on matches
@@ -654,13 +637,10 @@ if st.session_state.step == 1:
                             f"{'✓ ' if selected else ''}{interest}",
                             key=f"int_{interest}",
                             type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            # Use custom styling with on_click to manage the color
-                            args=(interest,),
-                            on_click=handle_interest_select if not selected else lambda: None
+                            use_container_width=True
                         ):
-                            # The on_click handler will be used instead
-                            pass
+                            handle_interest_select(interest)
+                            st.rerun()
                 
                 for i, interest in enumerate(interests[half_length:]):
                     with col2:
@@ -669,12 +649,10 @@ if st.session_state.step == 1:
                             f"{'✓ ' if selected else ''}{interest}",
                             key=f"int_{interest}",
                             type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            args=(interest,),
-                            on_click=handle_interest_select if not selected else lambda: None
+                            use_container_width=True
                         ):
-                            # The on_click handler will be used instead
-                            pass
+                            handle_interest_select(interest)
+                            st.rerun()
         
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -710,12 +688,10 @@ elif st.session_state.step == 2:
                             f"{'✓ ' if selected else ''}{skill}",
                             key=f"current_{skill}",
                             type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            args=(skill,),
-                            on_click=handle_current_skill_select if not selected else lambda: None
+                            use_container_width=True
                         ):
-                            # The on_click handler will be used instead
-                            pass
+                            handle_current_skill_select(skill)
+                            st.rerun()
                 
                 for i, skill in enumerate(skills[half_length:]):
                     with col2:
@@ -724,12 +700,10 @@ elif st.session_state.step == 2:
                             f"{'✓ ' if selected else ''}{skill}",
                             key=f"current_{skill}",
                             type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            args=(skill,),
-                            on_click=handle_current_skill_select if not selected else lambda: None
+                            use_container_width=True
                         ):
-                            # The on_click handler will be used instead
-                            pass
+                            handle_current_skill_select(skill)
+                            st.rerun()
         
         st.write(f"Selected: {len(st.session_state.current_skills)}/3")
         if st.session_state.current_skills:
@@ -754,12 +728,10 @@ elif st.session_state.step == 2:
                             f"{'✓ ' if selected else ''}{skill}",
                             key=f"desired_{skill}",
                             type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            args=(skill,),
-                            on_click=handle_desired_skill_select if not selected else lambda: None
+                            use_container_width=True
                         ):
-                            # The on_click handler will be used instead
-                            pass
+                            handle_desired_skill_select(skill)
+                            st.rerun()
                 
                 for i, skill in enumerate(skills[half_length:]):
                     with col2:
@@ -768,12 +740,10 @@ elif st.session_state.step == 2:
                             f"{'✓ ' if selected else ''}{skill}",
                             key=f"desired_{skill}",
                             type="primary" if selected else "secondary",
-                            use_container_width=True,
-                            args=(skill,),
-                            on_click=handle_desired_skill_select if not selected else lambda: None
+                            use_container_width=True
                         ):
-                            # The on_click handler will be used instead
-                            pass
+                            handle_desired_skill_select(skill)
+                            st.rerun()
         
         st.write(f"Selected: {len(st.session_state.desired_skills)}/3")
         if st.session_state.desired_skills:
@@ -818,12 +788,10 @@ elif st.session_state.step == 3:
                     f"{sdg['id']}. {'✓ ' if selected else ''}{sdg['name']}",
                     key=f"sdg_{sdg['id']}",
                     type="primary" if selected else "secondary",
-                    use_container_width=True,
-                    args=(sdg["id"],),
-                    on_click=handle_sdg_select if not selected else lambda: None
+                    use_container_width=True
                 ):
-                    # The on_click handler will be used instead
-                    pass
+                    handle_sdg_select(sdg["id"])
+                    st.rerun()
         
         st.markdown("---")
         st.write(f"Selected: {len(st.session_state.selected_sdgs)}/3")
