@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Add custom CSS for styling
+# Add custom CSS for styling - with direct CSS for tag elements
 st.markdown("""
 <style>
     .main {
@@ -21,18 +21,9 @@ st.markdown("""
         border-radius: 0.5rem;
         margin-bottom: 1rem;
     }
-    .career-card {
-        border: 1px solid #ddd;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        transition: transform 0.2s;
-    }
-    .career-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-    }
-    .tag {
+    
+    /* Define styles directly for spans instead of using classes */
+    span.tag {
         background-color: #f1f1f1;
         border-radius: 1rem;
         padding: 0.2rem 0.6rem;
@@ -41,32 +32,40 @@ st.markdown("""
         display: inline-block;
         font-size: 0.8rem;
     }
-    .interest-tag {
+    
+    span.interest-tag {
         background-color: #e1f5fe;
         color: #0277bd;
+        border-radius: 1rem;
+        padding: 0.2rem 0.6rem;
+        margin-right: 0.3rem;
+        margin-bottom: 0.3rem;
+        display: inline-block;
+        font-size: 0.8rem;
     }
-    .skill-tag {
+    
+    span.skill-tag {
         background-color: #e8f5e9;
         color: #2e7d32;
+        border-radius: 1rem;
+        padding: 0.2rem 0.6rem;
+        margin-right: 0.3rem;
+        margin-bottom: 0.3rem;
+        display: inline-block;
+        font-size: 0.8rem;
     }
-    .sdg-tag {
+    
+    span.sdg-tag {
         background-color: #ede7f6;
         color: #5e35b1;
+        border-radius: 1rem;
+        padding: 0.2rem 0.6rem;
+        margin-right: 0.3rem;
+        margin-bottom: 0.3rem;
+        display: inline-block;
+        font-size: 0.8rem;
     }
-    .title-box {
-        background-color: #1565c0;
-        color: white;
-        padding: 1rem;
-        border-radius: 0.5rem 0.5rem 0 0;
-        margin-bottom: 0;
-    }
-    .content-box {
-        padding: 1rem;
-        border: 1px solid #ddd;
-        border-top: none;
-        border-radius: 0 0 0.5rem 0.5rem;
-        margin-top: 0;
-    }
+    
     .step-container {
         background-color: white;
         padding: 1.5rem;
@@ -74,11 +73,7 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         margin-bottom: 1.5rem;
     }
-    .progress-container {
-        display: flex;
-        justify-content: space-between;
-        margin: 2rem 0;
-    }
+    
     .progress-step {
         width: 50px;
         height: 50px;
@@ -88,14 +83,17 @@ st.markdown("""
         justify-content: center;
         font-weight: bold;
     }
+    
     .progress-active {
         background-color: #1976d2;
         color: white;
     }
+    
     .progress-complete {
         background-color: #4caf50;
         color: white;
     }
+    
     .progress-inactive {
         background-color: #e0e0e0;
         color: #757575;
@@ -830,28 +828,39 @@ elif st.session_state.step == 4:
             # Display top match with special emphasis
             top_match = st.session_state.career_matches[0]
             st.markdown("## 🏆 Top Career Match")
-            st.markdown(f"""
-            <div style="border: 2px solid #1976d2; border-radius: 0.5rem; margin-bottom: 2rem;">
-                <div style="background-color: #1976d2; color: white; padding: 1rem; border-radius: 0.5rem 0.5rem 0 0;">
-                    <h3 style="margin: 0;">{top_match['title']}</h3>
-                </div>
-                <div style="padding: 1rem;">
-                    <p>{top_match['description']}</p>
-                    <div style="margin: 1rem 0;">
-                        <strong style="color: #1565c0;">Key Interests:</strong><br>
-                        {''.join([f'<span class="tag interest-tag">{interest}</span>' for interest in top_match['match_details']['interest_matches']])}
+            
+            # Create a clean card for the top match
+            st.markdown(
+                f"""
+                <div style="border: 2px solid #1976d2; border-radius: 0.5rem; margin-bottom: 2rem;">
+                    <div style="background-color: #1976d2; color: white; padding: 1rem; border-radius: 0.5rem 0.5rem 0 0;">
+                        <h3 style="margin: 0;">{top_match['title']}</h3>
                     </div>
-                    <div style="margin: 1rem 0;">
-                        <strong style="color: #2e7d32;">Key Skills:</strong><br>
-                        {''.join([f'<span class="tag skill-tag">{skill}</span>' for skill in top_match['match_details']['skill_matches']['current']])}
-                    </div>
-                    <div style="margin: 1rem 0;">
-                        <strong style="color: #5e35b1;">SDG Impact:</strong><br>
-                        {''.join([f'<span class="tag sdg-tag">SDG {sdg_id}: {[s["name"] for s in sdgs if s["id"] == sdg_id][0]}</span>' for sdg_id in top_match['match_details']['sdg_matches']])}
+                    <div style="padding: 1rem;">
+                        <p>{top_match['description']}</p>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, 
+                unsafe_allow_html=True
+            )
+            
+            # Display interests separately
+            st.markdown("<strong style='color: #1565c0;'>Key Interests:</strong>", unsafe_allow_html=True)
+            interests_html = " ".join([f"<span class='tag interest-tag'>{interest}</span>" 
+                                    for interest in top_match['match_details']['interest_matches']])
+            st.markdown(f"<div>{interests_html}</div>", unsafe_allow_html=True)
+            
+            # Display skills separately
+            st.markdown("<strong style='color: #2e7d32;'>Key Skills:</strong>", unsafe_allow_html=True)
+            skills_html = " ".join([f"<span class='tag skill-tag'>{skill}</span>" 
+                                  for skill in top_match['match_details']['skill_matches']['current']])
+            st.markdown(f"<div>{skills_html}</div>", unsafe_allow_html=True)
+            
+            # Display SDGs separately
+            st.markdown("<strong style='color: #5e35b1;'>SDG Impact:</strong>", unsafe_allow_html=True)
+            sdgs_html = " ".join([f"<span class='tag sdg-tag'>SDG {sdg_id}: {[s['name'] for s in sdgs if s['id'] == sdg_id][0]}</span>" 
+                                for sdg_id in top_match['match_details']['sdg_matches']])
+            st.markdown(f"<div>{sdgs_html}</div>", unsafe_allow_html=True)
             
             # Display other matches in a grid
             st.markdown("## Other Great Matches")
@@ -865,28 +874,32 @@ elif st.session_state.step == 4:
                     if i + j < len(other_matches):
                         career = other_matches[i + j]
                         with cols[j]:
-                            st.markdown(f"""
-                            <div class="career-card">
-                                <div class="title-box">
-                                    <h4 style="margin: 0;">{career['title']}</h4>
-                                </div>
-                                <div class="content-box">
-                                    <p style="font-size: 0.9rem;">{career['description']}</p>
-                                    <div style="margin-top: 0.5rem;">
-                                        <strong style="color: #1565c0; font-size: 0.8rem;">Key Interests:</strong><br>
-                                        <div style="margin: 0.3rem 0;">
-                                            {''.join([f'<span class="tag interest-tag">{interest}</span>' for interest in career['match_details']['interest_matches'][:2]])}
-                                        </div>
+                            # Display title and description
+                            st.markdown(
+                                f"""
+                                <div style="border: 1px solid #ddd; border-radius: 0.5rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                    <div style="background-color: #1976d2; color: white; padding: 0.7rem; border-radius: 0.5rem 0.5rem 0 0;">
+                                        <h4 style="margin: 0; font-size: 1.1rem;">{career['title']}</h4>
                                     </div>
-                                    <div style="margin-top: 0.5rem;">
-                                        <strong style="color: #2e7d32; font-size: 0.8rem;">Key Skills:</strong><br>
-                                        <div style="margin: 0.3rem 0;">
-                                            {''.join([f'<span class="tag skill-tag">{skill}</span>' for skill in career['match_details']['skill_matches']['current'][:2]])}
-                                        </div>
+                                    <div style="padding: 0.7rem;">
+                                        <p style="font-size: 0.9rem;">{career['description']}</p>
                                     </div>
                                 </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                                """, 
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Display interests
+                            st.markdown("<strong style='color: #1565c0; font-size: 0.8rem;'>Key Interests:</strong>", unsafe_allow_html=True)
+                            interests = " ".join([f"<span style='background-color: #e1f5fe; color: #0277bd; border-radius: 1rem; padding: 0.2rem 0.6rem; margin-right: 0.3rem; margin-bottom: 0.3rem; display: inline-block; font-size: 0.8rem;'>{interest}</span>" 
+                                               for interest in career['match_details']['interest_matches'][:2]])
+                            st.markdown(f"<div>{interests}</div>", unsafe_allow_html=True)
+                            
+                            # Display skills
+                            st.markdown("<strong style='color: #2e7d32; font-size: 0.8rem;'>Key Skills:</strong>", unsafe_allow_html=True)
+                            skills = " ".join([f"<span style='background-color: #e8f5e9; color: #2e7d32; border-radius: 1rem; padding: 0.2rem 0.6rem; margin-right: 0.3rem; margin-bottom: 0.3rem; display: inline-block; font-size: 0.8rem;'>{skill}</span>" 
+                                            for skill in career['match_details']['skill_matches']['current'][:2]])
+                            st.markdown(f"<div>{skills}</div>", unsafe_allow_html=True)
         else:
             st.warning("No matches found. Try adjusting your selections.")
         
