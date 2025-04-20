@@ -129,20 +129,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize OpenAI client with fallback
+# Initialize OpenAI client
 @st.cache_resource
 def get_openai_client():
-    try:
-        # Try to get API key from Streamlit Secrets
-        api_key = st.secrets.get("openai", {}).get("api_key", None)
-        if api_key:
-            return openai.OpenAI(api_key=api_key)
-        else:
-            st.warning("⚠️ OpenAI API key not found in secrets. AI analysis features will use pre-generated responses.")
-            return None
-    except Exception as e:
-        st.warning(f"⚠️ Error accessing OpenAI client: {e}. AI analysis features will use pre-generated responses.")
-        return None
+    # Get API key from Streamlit Secrets
+    api_key = st.secrets["openai"]["api_key"]
+    return openai.OpenAI(api_key=api_key)
 
 # Career data with mappings to interests, skills, and SDGs
 @st.cache_data
@@ -520,13 +512,6 @@ if 'ai_explanation' not in st.session_state:
     st.session_state.ai_explanation = {}
 if 'detailed_career_info' not in st.session_state:
     st.session_state.detailed_career_info = {}
-if 'api_available' not in st.session_state:
-    # Try to determine if API is available
-    try:
-        client = get_openai_client()
-        st.session_state.api_available = client is not None
-    except:
-        st.session_state.api_available = False
 
 # Load data
 careers = load_career_data()
@@ -557,225 +542,52 @@ def generate_career_explanation(career, user_interests, current_skills, desired_
     leverages their current skills, helps them develop their desired skills, and supports their values.
     """
     
-    # If OpenAI client is available, use it
-    if client:
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a career advisor who provides concise, personalized explanations."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=200
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            st.warning(f"Error generating explanation: {e}")
-    
-    # Fallback: Generate a basic explanation based on matching interests, skills, and SDGs
-    matches = []
-    
-    # Check for matching interests
-    interest_matches = [i for i in user_interests if i in career["interests"]]
-    if interest_matches:
-        matches.append(f"Your interest in {interest_matches[0]} aligns perfectly with this career path")
-    
-    # Check for matching current skills
-    skill_matches = [s for s in current_skills if s in career["skills"]]
-    if skill_matches:
-        matches.append(f"Your strength in {skill_matches[0]} is a key skill for success in this role")
-    
-    # Check for matching SDGs
-    if selected_sdgs and any(sdg_id in career["sdgs"] for sdg_id in selected_sdgs):
-        matching_sdg = next(sdg_id for sdg_id in selected_sdgs if sdg_id in career["sdgs"])
-        sdg_name = next(s["name"] for s in sdgs if s["id"] == matching_sdg)
-        matches.append(f"This career directly contributes to SDG {matching_sdg}: {sdg_name}, which you value")
-    
-    # Add a generic statement about skill development if needed
-    if len(matches) < 3:
-        desired_skill_matches = [s for s in desired_skills if s in career["skills"]]
-        if desired_skill_matches:
-            matches.append(f"This role will help you develop your desired skill in {desired_skill_matches[0]}")
-    
-    # Ensure we have at least one match
-    if not matches:
-        matches = ["This career offers a good balance of using your current skills while developing new ones",
-                   "The work aligns with your values and interests in meaningful ways"]
-    
-    return " and ".join(matches[:3]) + "."
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a career advisor who provides concise, personalized explanations."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error generating explanation: {e}")
+        return "Unable to generate explanation at this time."
 
 def get_detailed_career_info(career_title):
-    """Get detailed information about a career using OpenAI Assistants API with retrieval tool for web search"""
+    """Get detailed information about a career using AI"""
     client = get_openai_client()
     
-    # Career path templates (fallback if API is unavailable)
-    career_templates = {
-        "default": """
-## School Subjects
-* Mathematics
-* English/Language Arts
-* Science (Biology, Chemistry, or Physics)
-* Computer Science
-* Social Studies/History
-* Economics (if available)
-* Psychology (if available)
-
-## Key Skills
-* Critical Thinking
-* Problem Solving
-* Communication (Written and Verbal)
-* Time Management
-* Teamwork
-* Adaptability
-* Technical Skills specific to the field
-* Research and Analysis
-* Attention to Detail
-
-## Recommended Online Courses
-* Introduction to {0} (Coursera)
-* {0} Fundamentals (edX)
-* Professional Skills for {0} (LinkedIn Learning)
-* {0} Certificate Program (Udemy)
-* Advanced {0} Techniques (Khan Academy)
-
-## University Majors
-* {0} (B.S. or B.A.)
-* Business Administration with focus on {0}
-* Applied Sciences related to {0}
-* Liberal Arts with concentration in {0}
-* Engineering (for technical {0} roles)
-* Computer Science (for technical {0} roles)
-""",
-        # [other templates remain the same]
-    }
+    prompt = f"""
+    Provide detailed educational and career path information for someone interested in becoming a {career_title}. 
+    Include the following sections:
     
-    # Dictionary mapping some common career titles to template types
-    career_template_map = {
-        "AI Engineer": "tech",
-        "Digital Learning Developer": "tech",
-        # [other mappings remain the same]
-    }
+    1. School Subjects: List 5-7 specific high school or secondary school subjects that would be most beneficial for this career path.
     
-    # If OpenAI client is available, use the Assistants API with retrieval
-    if client:
-        try:
-            with st.spinner(f"Searching the web for current information about {career_title}..."):
-                # Create an Assistant with the retrieval tool
-                assistant = client.beta.assistants.create(
-                    name="Career Research Specialist",
-                    instructions="""You are a career research specialist who searches the internet for the most current and specific educational and career information. 
-                    Your task is to research specific careers and provide detailed guidance on educational pathways, required skills, and training opportunities.
-                    Always provide specific, actionable information based on current educational offerings and job market requirements.
-                    Format your responses clearly with markdown headings and bullet points.""",
-                    model="gpt-4o-mini",
-                    tools=[{"type": "retrieval"}]
-                )
-                
-                # Create a Thread
-                thread = client.beta.threads.create()
-                
-                # Create detailed query for the career research
-                query = f"""
-                Please conduct comprehensive internet research on how to become a {career_title}.
-                
-                I need specific information in these exact categories:
-                
-                1. School Subjects: What specific high school/secondary school subjects are most important for this career path? List 5-7 subjects with brief explanations of their relevance.
-                
-                2. Key Skills: What are the essential technical and soft skills needed according to industry experts and current job postings? List 7-9 specific skills.
-                
-                3. Online Courses: What specific online courses and certifications on platforms like Coursera, edX, Udemy would be most valuable? Include actual course names, institutions, and why they're valuable. List 4-5 courses.
-                
-                4. University Majors: What are the best university majors or degree programs for this career based on employment data? List 4-6 specific majors.
-                
-                Please format your research findings with markdown headings and bullet points. Be very specific - include actual course names, specific skills, and exact major names as they would appear in educational catalogs.
-                
-                This information is for a high school student planning their educational path, so focus on the full journey from secondary education through university and into the profession.
-                """
-                
-                # Add the message to the thread
-                message = client.beta.threads.messages.create(
-                    thread_id=thread.id,
-                    role="user",
-                    content=query
-                )
-                
-                # Run the Assistant on the Thread
-                run = client.beta.threads.runs.create(
-                    thread_id=thread.id,
-                    assistant_id=assistant.id
-                )
-                
-                # Poll for the run to complete
-                while run.status in ["queued", "in_progress"]:
-                    time.sleep(1)  # Wait 1 second before checking again
-                    run = client.beta.threads.runs.retrieve(
-                        thread_id=thread.id,
-                        run_id=run.id
-                    )
-                
-                # If run completed successfully, get the response
-                if run.status == "completed":
-                    # Get messages, sorted by creation time
-                    messages = client.beta.threads.messages.list(
-                        thread_id=thread.id
-                    )
-                    
-                    # The last message should be from the assistant
-                    for msg in messages.data:
-                        if msg.role == "assistant":
-                            response_content = msg.content[0].text.value
-                            
-                            # Add a note about the source
-                            response_content += "\n\n_Information sourced from the web via OpenAI Assistants API (April 2025)_"
-                            
-                            # Clean up resources - delete the assistant and thread
-                            try:
-                                client.beta.assistants.delete(assistant.id)
-                                # Note: Thread deletion is not necessary and often fails with "Thread is being used" errors
-                            except:
-                                pass
-                                
-                            return response_content
-                else:
-                    st.warning(f"Search failed with status: {run.status}")
-                    # Continue to fallback
-        
-        except Exception as e:
-            st.warning(f"Web search error: {e}")
-            # Try regular completion API as fallback before going to templates
-            try:
-                prompt = f"""
-                Provide detailed educational and career path information for someone interested in becoming a {career_title}. 
-                Include the following sections:
-                
-                1. School Subjects: List 5-7 specific high school or secondary school subjects that would be most beneficial for this career path.
-                
-                2. Key Skills: List 7-9 specific technical and soft skills needed for success in this career.
-                
-                3. Recommended Online Courses: Suggest 4-5 specific online courses or certifications (with platform names like Coursera, edX, etc.) that would help someone prepare for this career.
-                
-                4. University Majors: List 4-6 specific university majors or degree programs that could lead to this career.
-                
-                Format each section with markdown headings and bullet points. Be specific, practical, and focused on actionable educational paths.
-                """
-                
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are a career education specialist who provides practical educational guidance."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=800
-                )
-                return response.choices[0].message.content
-            except:
-                # Continue to template fallback
-                pass
+    2. Key Skills: List 7-9 specific technical and soft skills needed for success in this career.
     
-    # Fallback to template-based response
-    template_type = career_template_map.get(career_title, "default")
-    return career_templates[template_type].format(career_title)
+    3. Recommended Online Courses: Suggest 4-5 specific online courses or certifications (with platform names like Coursera, edX, etc.) that would help someone prepare for this career.
+    
+    4. University Majors: List 4-6 specific university majors or degree programs that could lead to this career.
+    
+    Format each section with bullet points for clarity. Be specific, practical, and focused on actionable educational paths.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a career education specialist who provides practical educational guidance."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=700
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error getting career details: {e}")
+        return "Unable to retrieve detailed information at this time."
 
 # Helper functions
 def handle_interest_select(interest):
@@ -859,24 +671,18 @@ def match_careers():
     
     st.session_state.career_matches = top_matches
     
-    # Generate AI explanations for all matches in a background-friendly way
-    # We'll do this one by one to avoid overwhelming the API
+    # Generate AI explanation for the top match
     if top_matches:
-        with st.spinner("Analyzing your career matches..."):
-            for career in top_matches[:3]:  # Only process top 3 to save time/resources
-                if career["id"] not in st.session_state.ai_explanation:
-                    try:
-                        explanation = generate_career_explanation(
-                            career, 
-                            st.session_state.selected_interests,
-                            st.session_state.current_skills,
-                            st.session_state.desired_skills,
-                            st.session_state.selected_sdgs
-                        )
-                        st.session_state.ai_explanation[career["id"]] = explanation
-                    except Exception as e:
-                        st.warning(f"Could not generate explanation for {career['title']}: {e}")
-                        continue
+        top_career = top_matches[0]
+        if top_career["id"] not in st.session_state.ai_explanation:
+            explanation = generate_career_explanation(
+                top_career, 
+                st.session_state.selected_interests,
+                st.session_state.current_skills,
+                st.session_state.desired_skills,
+                st.session_state.selected_sdgs
+            )
+            st.session_state.ai_explanation[top_career["id"]] = explanation
     
     st.session_state.step = 4
 
