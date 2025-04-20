@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import openai
+import time
 
 # Set page configuration
 st.set_page_config(
@@ -98,8 +100,41 @@ st.markdown("""
         background-color: #e0e0e0;
         color: #757575;
     }
+    
+    .career-card {
+        cursor: pointer;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .career-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    }
+    
+    .career-detail-container {
+        border: 1px solid #e0e0e0;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+        background-color: #fafafa;
+    }
+    
+    .ai-analysis {
+        background-color: #f5f9ff;
+        border-left: 4px solid #1976d2;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 0.5rem 0.5rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# Initialize OpenAI client
+@st.cache_resource
+def get_openai_client():
+    # Get API key from Streamlit Secrets
+    api_key = st.secrets["openai"]["api_key"]
+    return openai.OpenAI(api_key=api_key)
 
 # Career data with mappings to interests, skills, and SDGs
 @st.cache_data
@@ -471,6 +506,12 @@ if 'selected_sdgs' not in st.session_state:
     st.session_state.selected_sdgs = []
 if 'career_matches' not in st.session_state:
     st.session_state.career_matches = []
+if 'selected_career_details' not in st.session_state:
+    st.session_state.selected_career_details = None
+if 'ai_explanation' not in st.session_state:
+    st.session_state.ai_explanation = {}
+if 'detailed_career_info' not in st.session_state:
+    st.session_state.detailed_career_info = {}
 
 # Load data
 careers = load_career_data()
@@ -478,42 +519,75 @@ interest_categories = load_interest_categories()
 skill_categories = load_skill_categories()
 sdgs = load_sdgs()
 
-# Header
-st.title("Career Discovery Algorithm")
-st.write("Find careers that match your interests, skills, and values")
+# AI Functions
+def generate_career_explanation(career, user_interests, current_skills, desired_skills, selected_sdgs):
+    """Generate AI explanation for why a career matches the user's profile"""
+    client = get_openai_client()
+    
+    # Get SDG names for selected SDGs
+    sdg_names = [s["name"] for s in sdgs if s["id"] in selected_sdgs]
+    
+    # Create prompt
+    prompt = f"""
+    As a career advisor, explain why the career '{career['title']}' ({career['description']}) 
+    is a good match for someone with the following profile:
+    
+    Interests: {', '.join(user_interests)}
+    Current Skills: {', '.join(current_skills)}
+    Skills they want to develop: {', '.join(desired_skills)}
+    Values (SDGs they care about): {', '.join(sdg_names)}
+    
+    Identify specific connections between their profile and this career. 
+    Keep your response to 3-4 sentences and focus on how this career aligns with their interests, 
+    leverages their current skills, helps them develop their desired skills, and supports their values.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a career advisor who provides concise, personalized explanations."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error generating explanation: {e}")
+        return "Unable to generate explanation at this time."
 
-# Progress indicators
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.markdown(f"""
-    <div class="progress-step {'progress-active' if st.session_state.step == 1 else 'progress-complete' if st.session_state.step > 1 else 'progress-inactive'}">
-        1
-    </div>
-    <div style="text-align: center; font-size: 0.8rem;">Interests</div>
-    """, unsafe_allow_html=True)
-with col2:
-    st.markdown(f"""
-    <div class="progress-step {'progress-active' if st.session_state.step == 2 else 'progress-complete' if st.session_state.step > 2 else 'progress-inactive'}">
-        2
-    </div>
-    <div style="text-align: center; font-size: 0.8rem;">Skills</div>
-    """, unsafe_allow_html=True)
-with col3:
-    st.markdown(f"""
-    <div class="progress-step {'progress-active' if st.session_state.step == 3 else 'progress-complete' if st.session_state.step > 3 else 'progress-inactive'}">
-        3
-    </div>
-    <div style="text-align: center; font-size: 0.8rem;">Values</div>
-    """, unsafe_allow_html=True)
-with col4:
-    st.markdown(f"""
-    <div class="progress-step {'progress-active' if st.session_state.step == 4 else 'progress-complete' if st.session_state.step > 4 else 'progress-inactive'}">
-        4
-    </div>
-    <div style="text-align: center; font-size: 0.8rem;">Results</div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<hr>", unsafe_allow_html=True)
+def get_detailed_career_info(career_title):
+    """Get detailed information about a career using AI"""
+    client = get_openai_client()
+    
+    prompt = f"""
+    Provide detailed educational and career path information for someone interested in becoming a {career_title}. 
+    Include the following sections:
+    
+    1. School Subjects: List 5-7 specific high school or secondary school subjects that would be most beneficial for this career path.
+    
+    2. Key Skills: List 7-9 specific technical and soft skills needed for success in this career.
+    
+    3. Recommended Online Courses: Suggest 4-5 specific online courses or certifications (with platform names like Coursera, edX, etc.) that would help someone prepare for this career.
+    
+    4. University Majors: List 4-6 specific university majors or degree programs that could lead to this career.
+    
+    Format each section with bullet points for clarity. Be specific, practical, and focused on actionable educational paths.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a career education specialist who provides practical educational guidance."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=700
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error getting career details: {e}")
+        return "Unable to retrieve detailed information at this time."
 
 # Helper functions
 def handle_interest_select(interest):
@@ -596,7 +670,36 @@ def match_careers():
     )[:6]
     
     st.session_state.career_matches = top_matches
+    
+    # Generate AI explanation for the top match
+    if top_matches:
+        top_career = top_matches[0]
+        if top_career["id"] not in st.session_state.ai_explanation:
+            explanation = generate_career_explanation(
+                top_career, 
+                st.session_state.selected_interests,
+                st.session_state.current_skills,
+                st.session_state.desired_skills,
+                st.session_state.selected_sdgs
+            )
+            st.session_state.ai_explanation[top_career["id"]] = explanation
+    
     st.session_state.step = 4
+
+def get_career_details(career):
+    """Get or generate detailed information about a career"""
+    if career["id"] not in st.session_state.detailed_career_info:
+        # Show spinner while loading
+        with st.spinner(f"Gathering information about {career['title']}..."):
+            info = get_detailed_career_info(career["title"])
+            st.session_state.detailed_career_info[career["id"]] = info
+    
+    st.session_state.selected_career_details = {
+        "id": career["id"],
+        "title": career["title"],
+        "description": career["description"],
+        "info": st.session_state.detailed_career_info[career["id"]]
+    }
 
 def restart():
     st.session_state.step = 1
@@ -605,6 +708,8 @@ def restart():
     st.session_state.desired_skills = []
     st.session_state.selected_sdgs = []
     st.session_state.career_matches = []
+    st.session_state.selected_career_details = None
+    # Keep AI explanations and career details cached
 
 def go_to_next_step():
     if st.session_state.step == 1 and len(st.session_state.selected_interests) == 3:
@@ -616,6 +721,46 @@ def go_to_next_step():
 
 def get_sdg_names(sdg_ids):
     return [sdg["name"] for sdg in sdgs if sdg["id"] in sdg_ids]
+
+def back_to_results():
+    st.session_state.selected_career_details = None
+
+# Header
+st.title("Career Discovery Algorithm")
+st.write("Find careers that match your interests, skills, and values")
+
+# Progress indicators
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.markdown(f"""
+    <div class="progress-step {'progress-active' if st.session_state.step == 1 else 'progress-complete' if st.session_state.step > 1 else 'progress-inactive'}">
+        1
+    </div>
+    <div style="text-align: center; font-size: 0.8rem;">Interests</div>
+    """, unsafe_allow_html=True)
+with col2:
+    st.markdown(f"""
+    <div class="progress-step {'progress-active' if st.session_state.step == 2 else 'progress-complete' if st.session_state.step > 2 else 'progress-inactive'}">
+        2
+    </div>
+    <div style="text-align: center; font-size: 0.8rem;">Skills</div>
+    """, unsafe_allow_html=True)
+with col3:
+    st.markdown(f"""
+    <div class="progress-step {'progress-active' if st.session_state.step == 3 else 'progress-complete' if st.session_state.step > 3 else 'progress-inactive'}">
+        3
+    </div>
+    <div style="text-align: center; font-size: 0.8rem;">Values</div>
+    """, unsafe_allow_html=True)
+with col4:
+    st.markdown(f"""
+    <div class="progress-step {'progress-active' if st.session_state.step == 4 else 'progress-complete' if st.session_state.step > 4 else 'progress-inactive'}">
+        4
+    </div>
+    <div style="text-align: center; font-size: 0.8rem;">Results</div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr>", unsafe_allow_html=True)
 
 # Step 1: Interests
 if st.session_state.step == 1:
@@ -819,94 +964,135 @@ elif st.session_state.step == 3:
 
 # Step 4: Results
 elif st.session_state.step == 4:
-    with st.container():
-        st.markdown('<div class="step-container">', unsafe_allow_html=True)
-        st.markdown('<h2 class="step-header" style="background-color: #e1f5fe; color: #0277bd;">Your Career Matches</h2>', unsafe_allow_html=True)
-        st.write("Based on your interests, skills, and values, here are your top career matches:")
+    if st.session_state.selected_career_details:
+        # Display detailed career view
+        career_details = st.session_state.selected_career_details
         
-        if st.session_state.career_matches:
-            # Display top match with special emphasis
-            top_match = st.session_state.career_matches[0]
-            st.markdown("## 🏆 Top Career Match")
+        with st.container():
+            st.markdown('<div class="step-container">', unsafe_allow_html=True)
             
-            # Create a clean card for the top match
-            st.markdown(
-                f"""
-                <div style="border: 2px solid #1976d2; border-radius: 0.5rem; margin-bottom: 2rem;">
-                    <div style="background-color: #1976d2; color: white; padding: 1rem; border-radius: 0.5rem 0.5rem 0 0;">
-                        <h3 style="margin: 0;">{top_match['title']}</h3>
+            # Header with back button
+            col1, col2 = st.columns([1, 5])
+            with col1:
+                if st.button("← Back", key="back_to_results"):
+                    back_to_results()
+                    st.rerun()
+            with col2:
+                st.markdown(f"<h2>{career_details['title']}</h2>", unsafe_allow_html=True)
+            
+            st.markdown(f"<p><em>{career_details['description']}</em></p>", unsafe_allow_html=True)
+            
+            # Display AI-generated career information
+            st.markdown(career_details["info"], unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        # Display career match results
+        with st.container():
+            st.markdown('<div class="step-container">', unsafe_allow_html=True)
+            st.markdown('<h2 class="step-header" style="background-color: #e1f5fe; color: #0277bd;">Your Career Matches</h2>', unsafe_allow_html=True)
+            st.write("Based on your interests, skills, and values, here are your top career matches:")
+            
+            if st.session_state.career_matches:
+                # Display top match with special emphasis
+                top_match = st.session_state.career_matches[0]
+                st.markdown("## 🏆 Top Career Match")
+                
+                # Create a clean card for the top match
+                st.markdown(
+                    f"""
+                    <div class="career-card" style="border: 2px solid #1976d2; border-radius: 0.5rem; margin-bottom: 2rem;">
+                        <div style="background-color: #1976d2; color: white; padding: 1rem; border-radius: 0.5rem 0.5rem 0 0;">
+                            <h3 style="margin: 0;">{top_match['title']}</h3>
+                        </div>
+                        <div style="padding: 1rem;">
+                            <p>{top_match['description']}</p>
+                        </div>
                     </div>
-                    <div style="padding: 1rem;">
-                        <p>{top_match['description']}</p>
-                    </div>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
-            
-            # Display interests separately
-            st.markdown("<strong style='color: #1565c0;'>Key Interests:</strong>", unsafe_allow_html=True)
-            interests_html = " ".join([f"<span class='tag interest-tag'>{interest}</span>" 
-                                    for interest in top_match['match_details']['interest_matches']])
-            st.markdown(f"<div>{interests_html}</div>", unsafe_allow_html=True)
-            
-            # Display skills separately
-            st.markdown("<strong style='color: #2e7d32;'>Key Skills:</strong>", unsafe_allow_html=True)
-            skills_html = " ".join([f"<span class='tag skill-tag'>{skill}</span>" 
-                                  for skill in top_match['match_details']['skill_matches']['current']])
-            st.markdown(f"<div>{skills_html}</div>", unsafe_allow_html=True)
-            
-            # Display SDGs separately
-            st.markdown("<strong style='color: #5e35b1;'>SDG Impact:</strong>", unsafe_allow_html=True)
-            sdgs_html = " ".join([f"<span class='tag sdg-tag'>SDG {sdg_id}: {[s['name'] for s in sdgs if s['id'] == sdg_id][0]}</span>" 
-                                for sdg_id in top_match['match_details']['sdg_matches']])
-            st.markdown(f"<div>{sdgs_html}</div>", unsafe_allow_html=True)
-            
-            # Display other matches in a grid
-            st.markdown("## Other Great Matches")
-            
-            # Create rows of 3 columns for the remaining matches
-            other_matches = st.session_state.career_matches[1:]
-            
-            for i in range(0, len(other_matches), 3):
-                cols = st.columns(3)
-                for j in range(3):
-                    if i + j < len(other_matches):
-                        career = other_matches[i + j]
-                        with cols[j]:
-                            # Display title and description
-                            st.markdown(
-                                f"""
-                                <div style="border: 1px solid #ddd; border-radius: 0.5rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                                    <div style="background-color: #1976d2; color: white; padding: 0.7rem; border-radius: 0.5rem 0.5rem 0 0;">
-                                        <h4 style="margin: 0; font-size: 1.1rem;">{career['title']}</h4>
+                    """, 
+                    unsafe_allow_html=True
+                )
+                
+                # Display AI explanation for the top match
+                if top_match["id"] in st.session_state.ai_explanation:
+                    st.markdown('<div class="ai-analysis">', unsafe_allow_html=True)
+                    st.markdown("### 🤖 AI Career Analysis")
+                    st.markdown(st.session_state.ai_explanation[top_match["id"]])
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Display interests separately
+                st.markdown("<strong style='color: #1565c0;'>Key Interests:</strong>", unsafe_allow_html=True)
+                interests_html = " ".join([f"<span class='tag interest-tag'>{interest}</span>" 
+                                        for interest in top_match['match_details']['interest_matches']])
+                st.markdown(f"<div>{interests_html}</div>", unsafe_allow_html=True)
+                
+                # Display skills separately
+                st.markdown("<strong style='color: #2e7d32;'>Key Skills:</strong>", unsafe_allow_html=True)
+                skills_html = " ".join([f"<span class='tag skill-tag'>{skill}</span>" 
+                                      for skill in top_match['match_details']['skill_matches']['current']])
+                st.markdown(f"<div>{skills_html}</div>", unsafe_allow_html=True)
+                
+                # Display SDGs separately
+                st.markdown("<strong style='color: #5e35b1;'>SDG Impact:</strong>", unsafe_allow_html=True)
+                sdgs_html = " ".join([f"<span class='tag sdg-tag'>SDG {sdg_id}: {[s['name'] for s in sdgs if s['id'] == sdg_id][0]}</span>" 
+                                    for sdg_id in top_match['match_details']['sdg_matches']])
+                st.markdown(f"<div>{sdgs_html}</div>", unsafe_allow_html=True)
+                
+                # Add button to explore this career
+                if st.button("Explore This Career Path", key=f"explore_{top_match['id']}"):
+                    get_career_details(top_match)
+                    st.rerun()
+                
+                # Display other matches in a grid
+                st.markdown("## Other Great Matches")
+                
+                # Create rows of 3 columns for the remaining matches
+                other_matches = st.session_state.career_matches[1:]
+                
+                for i in range(0, len(other_matches), 3):
+                    cols = st.columns(3)
+                    for j in range(3):
+                        if i + j < len(other_matches):
+                            career = other_matches[i + j]
+                            with cols[j]:
+                                # Display title and description
+                                st.markdown(
+                                    f"""
+                                    <div class="career-card" style="border: 1px solid #ddd; border-radius: 0.5rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                        <div style="background-color: #1976d2; color: white; padding: 0.7rem; border-radius: 0.5rem 0.5rem 0 0;">
+                                            <h4 style="margin: 0; font-size: 1.1rem;">{career['title']}</h4>
+                                        </div>
+                                        <div style="padding: 0.7rem;">
+                                            <p style="font-size: 0.9rem;">{career['description']}</p>
+                                        </div>
                                     </div>
-                                    <div style="padding: 0.7rem;">
-                                        <p style="font-size: 0.9rem;">{career['description']}</p>
-                                    </div>
-                                </div>
-                                """, 
-                                unsafe_allow_html=True
-                            )
-                            
-                            # Display interests
-                            st.markdown("<strong style='color: #1565c0; font-size: 0.8rem;'>Key Interests:</strong>", unsafe_allow_html=True)
-                            interests = " ".join([f"<span style='background-color: #e1f5fe; color: #0277bd; border-radius: 1rem; padding: 0.2rem 0.6rem; margin-right: 0.3rem; margin-bottom: 0.3rem; display: inline-block; font-size: 0.8rem;'>{interest}</span>" 
-                                               for interest in career['match_details']['interest_matches'][:2]])
-                            st.markdown(f"<div>{interests}</div>", unsafe_allow_html=True)
-                            
-                            # Display skills
-                            st.markdown("<strong style='color: #2e7d32; font-size: 0.8rem;'>Key Skills:</strong>", unsafe_allow_html=True)
-                            skills = " ".join([f"<span style='background-color: #e8f5e9; color: #2e7d32; border-radius: 1rem; padding: 0.2rem 0.6rem; margin-right: 0.3rem; margin-bottom: 0.3rem; display: inline-block; font-size: 0.8rem;'>{skill}</span>" 
-                                            for skill in career['match_details']['skill_matches']['current'][:2]])
-                            st.markdown(f"<div>{skills}</div>", unsafe_allow_html=True)
-        else:
-            st.warning("No matches found. Try adjusting your selections.")
-        
-        if st.button("Start Over", type="primary"):
-            restart()
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+                                    """, 
+                                    unsafe_allow_html=True
+                                )
+                                
+                                # Display interests
+                                st.markdown("<strong style='color: #1565c0; font-size: 0.8rem;'>Key Interests:</strong>", unsafe_allow_html=True)
+                                interests = " ".join([f"<span style='background-color: #e1f5fe; color: #0277bd; border-radius: 1rem; padding: 0.2rem 0.6rem; margin-right: 0.3rem; margin-bottom: 0.3rem; display: inline-block; font-size: 0.8rem;'>{interest}</span>" 
+                                                   for interest in career['match_details']['interest_matches'][:2]])
+                                st.markdown(f"<div>{interests}</div>", unsafe_allow_html=True)
+                                
+                                # Display skills
+                                st.markdown("<strong style='color: #2e7d32; font-size: 0.8rem;'>Key Skills:</strong>", unsafe_allow_html=True)
+                                skills = " ".join([f"<span style='background-color: #e8f5e9; color: #2e7d32; border-radius: 1rem; padding: 0.2rem 0.6rem; margin-right: 0.3rem; margin-bottom: 0.3rem; display: inline-block; font-size: 0.8rem;'>{skill}</span>" 
+                                                for skill in career['match_details']['skill_matches']['current'][:2]])
+                                st.markdown(f"<div>{skills}</div>", unsafe_allow_html=True)
+                                
+                                # Add button to explore this career
+                                if st.button("Explore", key=f"explore_{career['id']}"):
+                                    get_career_details(career)
+                                    st.rerun()
+            else:
+                st.warning("No matches found. Try adjusting your selections.")
+            
+            if st.button("Start Over", type="primary"):
+                restart()
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
